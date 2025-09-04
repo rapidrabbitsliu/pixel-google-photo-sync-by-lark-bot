@@ -83,6 +83,9 @@ if (!fs.existsSync(TEMP_DIR)) {
 // Handler for processing file messages (image, media, file).
 async function processFileMessage(chat_id, message_id, fileKey, fileName, event_id, message_type) {
   const localFilePath = path.join(TEMP_DIR, fileName);
+  // All pushed files will now be stored in a dedicated folder.
+  const remoteDirPath = `/sdcard/DCIM/FeishuSync`;
+  const remoteFilePath = `${remoteDirPath}/${fileName}`;
 
   // Reply to the user to confirm file reception.
   await client.im.v1.message.create({
@@ -116,15 +119,19 @@ async function processFileMessage(chat_id, message_id, fileKey, fileName, event_
     const writeRet = await response.writeFile(localFilePath);
     console.log(`File downloaded to ${localFilePath}`);
 
-    // ADB push command to transfer the file to the phone's DCIM/Camera directory.
-    const adbCommand = `adb push "${localFilePath}" /sdcard/DCIM/Camera/`;
-
     try {
-      console.log(`Executing command: ${adbCommand}`);
-      const adbOutput = await executeCommand(adbCommand);
+      // First, ensure the destination directory exists on the phone.
+      const mkdirCommand = `adb shell mkdir -p "${remoteDirPath}"`;
+      console.log(`Executing mkdir command: ${mkdirCommand}`);
+      await executeCommand(mkdirCommand);
+
+      // ADB push command to transfer the file to the new directory.
+      const adbPushCommand = `adb push "${localFilePath}" "${remoteFilePath}"`;
+      console.log(`Executing command: ${adbPushCommand}`);
+      const adbOutput = await executeCommand(adbPushCommand);
       console.log(`ADB push result: ${adbOutput}`);
 
-      // Notify the user of successful transfer.
+      // Notify the user of successful transfer and new manual workflow.
       await client.im.v1.message.create({
         params: {
           receive_id_type: "chat_id"
@@ -132,7 +139,7 @@ async function processFileMessage(chat_id, message_id, fileKey, fileName, event_
         data: {
           receive_id: chat_id,
           content: JSON.stringify({
-            text: `文件 ${fileName} 已成功传输到 Pixel 2 XL。Google 相册正在自动同步...`
+            text: `文件 ${fileName} 已成功传输到 Pixel 2 XL 的新文件夹：\n\n**${remoteDirPath}**\n\n请在手机上使用文件管理器，手动进入该文件夹，批量选择照片后分享到 Google 相册，以完成同步。`
           }),
           msg_type: 'text'
         }
