@@ -1,0 +1,32 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/typescript-node
+{
+  "name": "pixel-google-photo-sync-by-lark-bot",
+  // Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:1-22-bookworm",
+  "features": {
+    "ghcr.io/devcontainers-extra/features/pnpm:2": {},
+    "ghcr.io/devcontainers-extra/features/turborepo-npm:1": {},
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
+  },
+
+  // Features to add to the dev container. More info: https://containers.dev/features.
+  // "features": {},
+
+  // Use 'forwardPorts' to make a list of ports inside the container available locally.
+  "forwardPorts": [3010],
+
+  // 使用 'postCreateCommand' 在容器创建后安装 adb
+  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y android-tools-adb",
+
+  // 配置环境变量，告诉 adb 客户端连接到主机上的 adb 服务器
+  "remoteEnv": {
+    "ADB_SERVER_SOCKET": "tcp:host.docker.internal:5037"
+  },
+
+  // Configure tool-specific properties.
+  // "customizations": {},
+
+  // Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
+  // "remoteUser": "root"
+}
