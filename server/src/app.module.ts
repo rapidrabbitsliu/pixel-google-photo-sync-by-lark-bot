@@ -3,6 +3,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { FeishuModule } from './feishu/feishu.module';
 import { ConfigModule } from '@nestjs/config';
+import { FileModule } from './file/file.module';
 
 @Module({
   imports: [
@@ -11,6 +12,7 @@ import { ConfigModule } from '@nestjs/config';
       envFilePath: '.env', // specify the path to your .env file
     }),
     FeishuModule,
+    FileModule,
   ],
   controllers: [AppController],
   providers: [AppService],
