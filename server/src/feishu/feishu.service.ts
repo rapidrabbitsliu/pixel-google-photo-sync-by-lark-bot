@@ -7,9 +7,10 @@ import {
   // OnModuleDestroy,
 } from '@nestjs/common';
 import * as lark from '@larksuiteoapi/node-sdk';
+import { ConfigService } from '@nestjs/config';
 import fs from 'fs';
 import path from 'path';
-import { ConfigService } from '@nestjs/config';
+import { FileService } from '../file/file.service';
 
 @Injectable()
 export class FeishuService implements OnModuleInit {
@@ -17,8 +18,43 @@ export class FeishuService implements OnModuleInit {
   private client: lark.Client;
   private wsClient: lark.WSClient;
   private processedEvents = new Set();
-  private readonly TEMP_DIR = path.join(process.cwd(), 'temp_uploads');
+  private readonly TEMP_DIR: string;
   private readonly EVENT_EXPIRY_MS = 10 * 60 * 1000;
+
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly fileService: FileService,
+  ) {
+    const appId = this.configService.get<string>('FEISHU_APP_ID');
+    const appSecret = this.configService.get<string>('FEISHU_APP_SECRET');
+    const downloadedDir = this.configService.get<string>(
+      'FEISHU_DOWNLOADED_DIR',
+    );
+
+    if (!appId || !appSecret) {
+      throw new Error(
+        'Feishu App ID or App Secret is not set in environment variables.',
+      );
+    }
+
+    this.TEMP_DIR = path.join(
+      process.cwd(),
+      '_data',
+      downloadedDir || 'feishu_downloaded',
+    );
+    this.client = new lark.Client({ appId, appSecret });
+    this.wsClient = new lark.WSClient({
+      appId,
+      appSecret,
+      loggerLevel: lark.LoggerLevel.debug,
+    });
+  }
+
+  onModuleInit() {
+    this.ensureTempDirectoryExists();
+    this.startWsClient();
+    this.startEventCleaner();
+  }
 
   /**
    * Ensures the temporary directory exists.
@@ -158,31 +194,6 @@ export class FeishuService implements OnModuleInit {
     this.logger.log('Feishu WSClient started.');
   }
 
-  onModuleInit() {
-    this.ensureTempDirectoryExists();
-    this.startWsClient();
-    this.startEventCleaner();
-  }
-
-  constructor(private readonly configService: ConfigService) {
-    const baseConfig = {
-      appId: this.configService.get('FEISHU_APP_ID') || '',
-      appSecret: this.configService.get('FEISHU_APP_SECRET') || '',
-    };
-
-    if (baseConfig.appId === '' || baseConfig.appSecret === '') {
-      throw new Error(
-        'Feishu App ID or App Secret is not set in environment variables.',
-      );
-    }
-
-    this.client = new lark.Client(baseConfig);
-    this.wsClient = new lark.WSClient({
-      ...baseConfig,
-      loggerLevel: lark.LoggerLevel.debug,
-    });
-  }
-
   // onModuleDestroy() {
   //   this.wsClient.close();
   // }
@@ -214,6 +225,7 @@ export class FeishuService implements OnModuleInit {
     fileName: string,
     resourceType: 'image' | 'file',
   ) {
+    const localFilePath = path.join(this.TEMP_DIR, fileName);
     await this.replyToUser(chat_id, `已接收文件: ${fileName}，正在准备传输...`);
 
     try {
@@ -227,9 +239,11 @@ export class FeishuService implements OnModuleInit {
         },
       });
 
-      const localFilePath = path.join(this.TEMP_DIR, fileName);
       await response.writeFile(localFilePath);
       this.logger.log(`File downloaded to ${localFilePath}`);
+
+      // Hand off the file to the FileService for management
+      await this.fileService.addFile(localFilePath, fileName);
 
       await this.replyToUser(chat_id, `文件 ${fileName} 已成功下载到服务端。`);
     } catch (downloadError) {

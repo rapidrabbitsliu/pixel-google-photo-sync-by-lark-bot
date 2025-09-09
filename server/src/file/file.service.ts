@@ -1,8 +1,8 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { promises as fs } from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import * as crypto from 'crypto';
+import { ConfigService } from '@nestjs/config';
 
 // Define the file status enum and data structure
 export enum FileStatus {
@@ -22,9 +22,26 @@ interface FileRecord {
 @Injectable()
 export class FileService implements OnModuleInit {
   private readonly logger = new Logger(FileService.name);
-  private readonly DATA_FILE = path.join(os.homedir(), 'feishu_files.json');
-  private readonly FILE_DIR = path.join(os.homedir(), 'feishu_downloads');
+  private readonly FILE_DATA_FILE: string; //path.join(os.homedir(), 'feishu_files.json');
+  private readonly FILE_MEDIA_DIR: string; // path.join(os.homedir(), 'feishu_downloads');
   private files: FileRecord[] = [];
+
+  constructor(private readonly configService: ConfigService) {
+    const fileMediaDir = this.configService.get<string>('FILE_MEDIA_DIR');
+    this.FILE_MEDIA_DIR = path.join(
+      process.cwd(),
+      '_data',
+      fileMediaDir || 'file_media',
+    );
+
+    const fileDataDir = this.configService.get<string>('FILE_DATA_DIR');
+    this.FILE_DATA_FILE = path.join(
+      process.cwd(),
+      '_data',
+      fileDataDir || 'file_data',
+      'feishu_files.json',
+    );
+  }
 
   async onModuleInit() {
     await this.ensureFileDirectory();
@@ -36,16 +53,16 @@ export class FileService implements OnModuleInit {
    */
   private async ensureFileDirectory() {
     try {
-      await fs.mkdir(this.FILE_DIR, { recursive: true });
+      await fs.mkdir(this.FILE_MEDIA_DIR, { recursive: true });
     } catch (error) {
       if (error instanceof Error) {
         this.logger.error(
-          `Failed to create file directory: ${this.FILE_DIR}`,
+          `Failed to create file directory: ${this.FILE_MEDIA_DIR}`,
           error.stack,
         );
       } else {
         this.logger.error(
-          `Failed to create file directory: ${this.FILE_DIR}`,
+          `Failed to create file directory: ${this.FILE_MEDIA_DIR}`,
           error,
         );
       }
@@ -57,18 +74,18 @@ export class FileService implements OnModuleInit {
    */
   private async loadState() {
     try {
-      const data = await fs.readFile(this.DATA_FILE, 'utf-8');
+      const data = await fs.readFile(this.FILE_DATA_FILE, 'utf-8');
       this.files = JSON.parse(data) as FileRecord[];
       this.logger.log(`Loaded ${this.files.length} file records from disk.`);
     } catch (error) {
       if (error instanceof Error) {
         this.logger.error(
-          `Failed to load state from ${this.DATA_FILE}: ${error.message}`,
+          `Failed to load state from ${this.FILE_DATA_FILE}: ${error.message}`,
           error.stack,
         );
       } else if (!(error instanceof Error)) {
         this.logger.error(
-          `Failed to load state from ${this.DATA_FILE}: ${error}`,
+          `Failed to load state from ${this.FILE_DATA_FILE}: ${error}`,
         );
       }
     }
@@ -79,17 +96,20 @@ export class FileService implements OnModuleInit {
    */
   private async saveState() {
     try {
-      await fs.writeFile(this.DATA_FILE, JSON.stringify(this.files, null, 2));
+      await fs.writeFile(
+        this.FILE_DATA_FILE,
+        JSON.stringify(this.files, null, 2),
+      );
       this.logger.log('File state saved to disk.');
     } catch (error) {
       if (error instanceof Error) {
         this.logger.error(
-          `Failed to save state to ${this.DATA_FILE}: ${error.message}`,
+          `Failed to save state to ${this.FILE_DATA_FILE}: ${error.message}`,
           error.stack,
         );
       } else {
         this.logger.error(
-          `Failed to save state to ${this.DATA_FILE}: ${error}`,
+          `Failed to save state to ${this.FILE_DATA_FILE}: ${error}`,
         );
       }
     }
@@ -103,7 +123,7 @@ export class FileService implements OnModuleInit {
   async addFile(sourceFilePath: string, originalFileName: string) {
     const localFileKey = crypto.randomUUID();
     const localFileName = originalFileName || localFileKey;
-    const destinationFilePath = path.join(this.FILE_DIR, localFileName);
+    const destinationFilePath = path.join(this.FILE_MEDIA_DIR, localFileName);
 
     const newRecord: FileRecord = {
       fileKey: localFileKey,
@@ -149,7 +169,7 @@ export class FileService implements OnModuleInit {
    */
   getFilePath(fileKey: string): string | null {
     const file = this.files.find((f) => f.fileKey === fileKey);
-    return file ? path.join(this.FILE_DIR, file.fileName) : null;
+    return file ? path.join(this.FILE_MEDIA_DIR, file.fileName) : null;
   }
 
   /**
