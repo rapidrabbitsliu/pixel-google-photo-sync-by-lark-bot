@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import * as lark from '@larksuiteoapi/node-sdk';
 import { ConfigService } from '@nestjs/config';
-import fs from 'fs';
+import { promises as fs } from 'fs';
 import path from 'path';
 import { FileService } from '../file/file.service';
 
@@ -50,8 +50,8 @@ export class FeishuService implements OnModuleInit {
     });
   }
 
-  onModuleInit() {
-    this.ensureTempDirectoryExists();
+  async onModuleInit() {
+    await this.ensureTempDirectoryExists();
     this.startWsClient();
     this.startEventCleaner();
   }
@@ -59,10 +59,22 @@ export class FeishuService implements OnModuleInit {
   /**
    * Ensures the temporary directory exists.
    */
-  private ensureTempDirectoryExists() {
-    if (!fs.existsSync(this.TEMP_DIR)) {
-      fs.mkdirSync(this.TEMP_DIR);
+  private async ensureTempDirectoryExists() {
+    try {
+      await fs.mkdir(this.TEMP_DIR, { recursive: true });
       this.logger.log(`Created temporary directory: ${this.TEMP_DIR}`);
+    } catch (error) {
+      if (error instanceof Error) {
+        this.logger.error(
+          `Failed to create temporary directory: ${this.TEMP_DIR}`,
+          error.stack,
+        );
+      } else {
+        this.logger.error(
+          `Failed to create temporary directory: ${this.TEMP_DIR}`,
+          error,
+        );
+      }
     }
   }
 

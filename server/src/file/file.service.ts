@@ -22,8 +22,8 @@ interface FileRecord {
 @Injectable()
 export class FileService implements OnModuleInit {
   private readonly logger = new Logger(FileService.name);
-  private readonly FILE_DATA_FILE: string; //path.join(os.homedir(), 'feishu_files.json');
-  private readonly FILE_MEDIA_DIR: string; // path.join(os.homedir(), 'feishu_downloads');
+  private readonly FILE_DATA_FILE: string;
+  private readonly FILE_MEDIA_DIR: string;
   private files: FileRecord[] = [];
 
   constructor(private readonly configService: ConfigService) {
@@ -45,6 +45,7 @@ export class FileService implements OnModuleInit {
 
   async onModuleInit() {
     await this.ensureFileDirectory();
+    await this.ensureDataDirectory();
     await this.loadState();
   }
 
@@ -70,6 +71,25 @@ export class FileService implements OnModuleInit {
   }
 
   /**
+   * Ensures the data file directory exists.
+   */
+  private async ensureDataDirectory() {
+    const dataDir = path.dirname(this.FILE_DATA_FILE);
+    try {
+      await fs.mkdir(dataDir, { recursive: true });
+    } catch (error) {
+      if (error instanceof Error) {
+        this.logger.error(
+          `Failed to create data directory: ${dataDir}`,
+          error.stack,
+        );
+      } else {
+        this.logger.error(`Failed to create data directory: ${dataDir}`, error);
+      }
+    }
+  }
+
+  /**
    * Loads the file status from a local JSON file on service start.
    */
   private async loadState() {
@@ -78,14 +98,16 @@ export class FileService implements OnModuleInit {
       this.files = JSON.parse(data) as FileRecord[];
       this.logger.log(`Loaded ${this.files.length} file records from disk.`);
     } catch (error) {
-      if (error instanceof Error) {
+      // It's expected for this to fail on first run if the file doesn't exist.
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      if (error instanceof Error && (error as any).code !== 'ENOENT') {
         this.logger.error(
           `Failed to load state from ${this.FILE_DATA_FILE}: ${error.message}`,
           error.stack,
         );
-      } else if (!(error instanceof Error)) {
-        this.logger.error(
-          `Failed to load state from ${this.FILE_DATA_FILE}: ${error}`,
+      } else {
+        this.logger.log(
+          'No existing state file found, starting with empty state.',
         );
       }
     }
