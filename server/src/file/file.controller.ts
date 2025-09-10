@@ -34,7 +34,7 @@ export class FileController {
    * @returns An array of files in JSON format.
    */
   @Get('files')
-  getFiles(): FileRecordDto[] {
+  async getFiles(): Promise<FileRecordDto[]> {
     return this.fileService.getPendingFiles();
   }
 

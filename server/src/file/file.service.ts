@@ -84,7 +84,10 @@ export class FileService implements OnModuleInit {
           error.stack,
         );
       } else {
-        this.logger.error(`Failed to create data directory: ${dataDir}`, error);
+        this.logger.error(
+          `Failed to create data directory: ${dataDir}`,
+          error,
+        );
       }
     }
   }
@@ -99,16 +102,13 @@ export class FileService implements OnModuleInit {
       this.logger.log(`Loaded ${this.files.length} file records from disk.`);
     } catch (error) {
       // It's expected for this to fail on first run if the file doesn't exist.
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       if (error instanceof Error && (error as any).code !== 'ENOENT') {
         this.logger.error(
           `Failed to load state from ${this.FILE_DATA_FILE}: ${error.message}`,
           error.stack,
         );
       } else {
-        this.logger.log(
-          'No existing state file found, starting with empty state.',
-        );
+        this.logger.log('No existing state file found, starting with empty state.');
       }
     }
   }
@@ -161,8 +161,12 @@ export class FileService implements OnModuleInit {
         `File moved to managed directory: ${destinationFilePath}`,
       );
 
+      // Add the new record to the in-memory array
       this.files.push(newRecord);
+      
+      // Immediately save the updated state to disk
       await this.saveState();
+
     } catch (error) {
       if (error instanceof Error) {
         this.logger.error(
@@ -180,7 +184,9 @@ export class FileService implements OnModuleInit {
    * Gets a list of files that are still pending synchronization.
    * @returns An array of file records.
    */
-  getPendingFiles(): FileRecord[] {
+  async getPendingFiles(): Promise<FileRecord[]> {
+    await this.loadState();
+    this.logger.debug('files content query', JSON.stringify(this.files))
     return this.files.filter((file) => file.status === FileStatus.Pending);
   }
 
